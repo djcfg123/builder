@@ -1,0 +1,89 @@
+name: Build
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform
+        required: false
+
+env:
+  TAG_NAME: latest
+
+jobs:
+  buildroot:
+    name: Firmware
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - ssc335de_lite_imou-c22e-s2-v2
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Prepare firmware
+        run: |
+          echo "nameserver 8.8.8.8" | sudo tee /etc/resolv.conf
+          echo CACHE_DATE=$(date +%m) >> ${GITHUB_ENV}
+          git clone https://github.com/openipc/firmware --depth 1
+
+      - name: Dispatch platform
+        run: |
+          INPUT=${{inputs.platform}}
+          MATRIX=$(echo ${{matrix.platform}} | cut -d_ -f1)
+          if [ -z ${INPUT} ] || [ ${INPUT} = ${MATRIX} ]; then
+            echo RUN=${MATRIX} >> ${GITHUB_ENV}
+          fi
+
+      - name: Setup ccache
+        if: env.RUN
+        uses: actions/cache@v4
+        with:
+          path: /tmp/ccache
+          key: ${{matrix.platform}}-${{env.CACHE_DATE}}
+
+      - name: Build firmware
+        if: env.RUN
+        run: |
+          export GIT_HASH=$(git rev-parse --short ${GITHUB_SHA})
+          export GIT_BRANCH=${GITHUB_REF_NAME}
+          echo GIT_HASH=${GIT_HASH} >> ${GITHUB_ENV}
+          echo GIT_BRANCH=${GIT_BRANCH} >> ${GITHUB_ENV}
+
+          mkdir -p /tmp/ccache
+          ln -s /tmp/ccache ${HOME}/.ccache
+
+          NAME=${{matrix.platform}}
+          bash builder.sh ${NAME}
+          cd openipc
+
+          TIME=$(date -d @${SECONDS} +%M:%S)
+          echo TIME=${TIME} >> ${GITHUB_ENV}
+
+          NORFW=$(find output/images -name openipc*nor*)
+          if [ ! -z ${NORFW} ]; then
+            mv ${NORFW} ../${NAME}-nor.tgz
+            echo NORFW=${GITHUB_WORKSPACE}/${NAME}-nor.tgz >> ${GITHUB_ENV}
+          fi
+
+          NANDFW=$(find output/images -name openipc*nand*)
+          if [ ! -z ${NANDFW} ]; then
+            mv ${NANDFW} ../${NAME}-nand.tgz
+            echo NANDFW=${GITHUB_WORKSPACE}/${NAME}-nand.tgz >> ${GITHUB_ENV}
+          fi
+
+          if [ -z ${NORFW} ] && [ -z ${NANDFW} ]; then
+            exit 1
+          fi
+
+      - name: Upload firmware
+        if: env.NORFW || env.NANDFW
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          files: |
+            ${{env.NORFW}}
+            ${{env.NANDFW}}
