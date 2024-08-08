@@ -18,6 +18,8 @@ jobs:
       matrix:
         platform:
           - ssc335de_lite_imou-c22e-s2-v2
+          - t31_lite_xiaomi-mjsxj03hl
+          - t31_lite_xiaomi-mjsxj03hl-jxq03
 
     steps:
       - name: Checkout source
