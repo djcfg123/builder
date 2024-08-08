@@ -25,8 +25,8 @@ cli -s .onvif.enabled false
 # Set wlan device and credentials if need
 #
 fw_setenv wlandev rtl8189fs-generic
-#fw_setenv wlanssid Router
-#fw_setenv wlanpass 12345678
+fw_setenv wlanssid djcfg_home
+fw_setenv wlanpass 9ebec696
 #
 #
 # Set osmem and rmem
